@@ -1,0 +1,8 @@
+[package]
+name = "aureon-cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+aureon-core = { path = "../aureon-core" }
+aureon-node = { path = "../aureon-node" }
