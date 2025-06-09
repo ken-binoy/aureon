@@ -5,3 +5,9 @@ edition = "2024"
 
 [dependencies]
 aureon-core = { path = "../aureon-core" }
+sha2 = "0.10"
+rand = "0.8"
+
+[[bin]]
+name = "aureon-node"
+path = "src/main.rs"
