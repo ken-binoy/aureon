@@ -2,12 +2,14 @@ mod consensus;
 mod types;
 mod config;
 mod wasm;
+mod zk;
 
 use consensus::get_engine;
 use config::load_consensus_type;
 use types::Transaction;
 use wasm::WasmRuntime;
 use std::fs;
+use std::path::Path;
 
 fn main() -> anyhow::Result<()> {
     // Load consensus type from config.json (e.g., PoW or PoS)
@@ -39,18 +41,29 @@ fn main() -> anyhow::Result<()> {
     let is_valid = engine.validate_block(&block);
     
     println!("Is Block Valid? {}\n", is_valid);
+    
+    // Check if contracts directory exists
     let contracts_dir = "src/contracts";
-    for entry in fs::read_dir(contracts_dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()) == Some("wasm") {
-            println!("Loading WASM from: {:?}", path);
-            let wasm_bytes = fs::read(&path)?;
-            let wasm_runtime = WasmRuntime::new(&wasm_bytes)?;
-            let result = wasm_runtime.execute_contract(&transactions, 10_000)?;
-            println!("WASM Execution Result: {}\n", result);
+    if Path::new(contracts_dir).exists() {
+        println!("Loading WASM contracts from: {}", contracts_dir);
+        for entry in fs::read_dir(contracts_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("wasm") {
+                println!("Loading WASM from: {:?}", path);
+                let wasm_bytes = fs::read(&path)?;
+                let wasm_runtime = WasmRuntime::new(&wasm_bytes)?;
+                let result = wasm_runtime.execute_contract(&transactions, 10_000)?;
+                println!("WASM Execution Result: {}\n", result);
+            }
         }
+    } else {
+        println!("Contracts directory '{}' not found, skipping WASM execution.\n", contracts_dir);
     }
 
+    // Demonstrate zero-knowledge proof
+    println!("Demonstrating Zero-Knowledge Proof:");
+    zk::generate_and_verify_proof(3, 5)?;
+    
     Ok(())
 }
