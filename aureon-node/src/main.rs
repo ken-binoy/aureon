@@ -1,12 +1,15 @@
 mod consensus;
 mod types;
 mod config;
+mod wasm;
 
 use consensus::get_engine;
 use config::load_consensus_type;
 use types::Transaction;
+use wasm::WasmRuntime;
+use std::fs;
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     // Load consensus type from config.json (e.g., PoW or PoS)
     let consensus_type = load_consensus_type();
     println!("Selected Consensus: {:?}", consensus_type);
@@ -34,5 +37,20 @@ fn main() {
 
     // Validate the produced block
     let is_valid = engine.validate_block(&block);
+    
     println!("Is Block Valid? {}\n", is_valid);
+    let contracts_dir = "src/contracts";
+    for entry in fs::read_dir(contracts_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("wasm") {
+            println!("Loading WASM from: {:?}", path);
+            let wasm_bytes = fs::read(&path)?;
+            let wasm_runtime = WasmRuntime::new(&wasm_bytes)?;
+            let result = wasm_runtime.execute_contract(&transactions, 10_000)?;
+            println!("WASM Execution Result: {}\n", result);
+        }
+    }
+
+    Ok(())
 }
