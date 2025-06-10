@@ -2,11 +2,14 @@
 name = "aureon-node"
 version = "0.1.0"
 edition = "2024"
+build = "build.rs"
 
 [dependencies]
 aureon-core = { path = "../aureon-core" }
 sha2 = "0.10"
 rand = "0.8"
+wasmtime = "13.0"
+anyhow = "1.0"
 
 [[bin]]
 name = "aureon-node"
