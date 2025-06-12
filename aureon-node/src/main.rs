@@ -4,9 +4,10 @@ mod config;
 mod wasm;
 mod zk;
 mod mpt;
+mod db;
 
+use db::Db;
 use mpt::MerklePatriciaTrie;
-
 use consensus::get_engine;
 use config::load_consensus_type;
 use types::Transaction;
@@ -42,10 +43,9 @@ fn main() -> anyhow::Result<()> {
 
     // Validate the produced block
     let is_valid = engine.validate_block(&block);
-    
     println!("Is Block Valid? {}\n", is_valid);
     
-    // Check if contracts directory exists
+    // WASM Contract Execution
     let contracts_dir = "src/contracts";
     if Path::new(contracts_dir).exists() {
         println!("Loading WASM contracts from: {}", contracts_dir);
@@ -68,14 +68,21 @@ fn main() -> anyhow::Result<()> {
     println!("Demonstrating Zero-Knowledge Proof:");
     zk::generate_and_verify_proof(3, 5)?;
 
-    let mut trie = MerklePatriciaTrie::new();
-    trie.insert(b"foo".to_vec(), b"bar".to_vec());
-    trie.insert(b"fool".to_vec(), b"baz".to_vec());
-    let root_hash = trie.root_hash();
-    println!("Trie Root Hash: 0x{}", hex::encode(root_hash));
-
+    // MPT Test
     test_trie_demo();
-    
+
+    // RocksDB Demo
+    println!("\nMerkle Patricia Trie Demo with RocksDB:");
+    let db = Db::open("aureon_db");
+    db.put(b"foo", b"bar");
+    let fetched = db.get(b"foo");
+
+    if let Some(val) = fetched {
+        println!("Fetched from DB: foo => {}", String::from_utf8_lossy(&val));
+    } else {
+        println!("Key 'foo' not found in DB.");
+    }
+
     Ok(())
 }
 
