@@ -3,6 +3,9 @@ mod types;
 mod config;
 mod wasm;
 mod zk;
+mod mpt;
+
+use mpt::MerklePatriciaTrie;
 
 use consensus::get_engine;
 use config::load_consensus_type;
@@ -64,6 +67,28 @@ fn main() -> anyhow::Result<()> {
     // Demonstrate zero-knowledge proof
     println!("Demonstrating Zero-Knowledge Proof:");
     zk::generate_and_verify_proof(3, 5)?;
+
+    let mut trie = MerklePatriciaTrie::new();
+    trie.insert(b"foo".to_vec(), b"bar".to_vec());
+    trie.insert(b"fool".to_vec(), b"baz".to_vec());
+    let root_hash = trie.root_hash();
+    println!("Trie Root Hash: 0x{}", hex::encode(root_hash));
+
+    test_trie_demo();
     
     Ok(())
+}
+
+fn test_trie_demo() {
+    println!("\nMerkle Patricia Trie Demo:");
+
+    let mut trie = MerklePatriciaTrie::new();
+    trie.insert(b"foo".to_vec(), b"bar".to_vec());
+    trie.insert(b"fool".to_vec(), b"baz".to_vec());
+
+    let val = trie.get(b"foo".to_vec());
+    println!("Get 'foo': {:?}", val.map(|v| String::from_utf8_lossy(&v)));
+
+    let root = trie.root_hash();
+    println!("Merkle Patricia Trie Root Hash: 0x{}", hex::encode(root));
 }
