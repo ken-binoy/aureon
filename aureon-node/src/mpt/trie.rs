@@ -1,6 +1,6 @@
 use super::node::Node;
 use super::util::nibble_key;
-
+#[derive(Clone)]
 pub struct MerklePatriciaTrie {
     root: Option<Node>,
 }
