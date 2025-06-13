@@ -3,7 +3,7 @@ use std::fs;
 
 fn main() {
     // Path to contracts directory
-    let contracts_dir = "src/contracts";
+    let contracts_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src/contracts");
 
     // Read directory entries
     let entries = fs::read_dir(contracts_dir).expect("contracts directory not found");

@@ -6,26 +6,30 @@ mod zk;
 mod mpt;
 mod db;
 mod state_processor;
+mod simulated_processor;
 
 use consensus::get_engine;
 use config::load_consensus_type;
 use types::Transaction;
 use wasm::WasmRuntime;
-use std::{fs, path::Path, collections::HashMap};
+
+use std::fs;
+use std::path::Path;
+use std::collections::HashMap;
 
 use db::Db;
 use mpt::MerklePatriciaTrie;
 use state_processor::StateProcessor;
 
 fn main() -> anyhow::Result<()> {
-    // Load consensus type from config.json
+    // === Load Consensus Type ===
     let consensus_type = load_consensus_type();
     println!("Selected Consensus: {:?}", consensus_type);
 
-    // Initialize consensus engine
+    // === Initialize Consensus Engine ===
     let engine = get_engine(consensus_type);
 
-    // Simulate sample transactions
+    // === Sample Transactions ===
     let transactions = vec![
         Transaction {
             from: "Alice".into(),
@@ -39,41 +43,11 @@ fn main() -> anyhow::Result<()> {
         },
     ];
 
-    // Produce and validate block
-    let block = engine.produce_block(transactions.clone());
-    println!("Produced Block:\n{:#?}", block);
-
-    let is_valid = engine.validate_block(&block);
-    println!("Is Block Valid? {}\n", is_valid);
-
-    // Execute WASM contracts if present
-    let contracts_dir = "src/contracts";
-    if Path::new(contracts_dir).exists() {
-        println!("Loading WASM contracts from: {}", contracts_dir);
-        for entry in fs::read_dir(contracts_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("wasm") {
-                println!("Loading WASM from: {:?}", path);
-                let wasm_bytes = fs::read(&path)?;
-                let wasm_runtime = WasmRuntime::new(&wasm_bytes)?;
-                let result = wasm_runtime.execute_contract(&transactions, 10_000)?;
-                println!("WASM Execution Result: {}\n", result);
-            }
-        }
-    } else {
-        println!("Contracts directory '{}' not found, skipping WASM execution.\n", contracts_dir);
-    }
-
-    // Demonstrate zk-SNARK
-    println!("Demonstrating Zero-Knowledge Proof:");
-    zk::generate_and_verify_proof(3, 5)?;
-
-    // === Apply Block Transactions to State ===
+    // === Set up Database and Trie ===
     let mut db = Db::open("aureon_db");
     let mut trie = MerklePatriciaTrie::new();
 
-    // Set initial balances
+    // === Initialize Account Balances ===
     let initial_balances: HashMap<&str, u64> = [
         ("Alice", 100),
         ("Charlie", 100),
@@ -85,20 +59,57 @@ fn main() -> anyhow::Result<()> {
         trie.insert(account.as_bytes().to_vec(), balance.to_le_bytes().to_vec());
     }
 
-    // Apply block transactions
-    let mut processor = StateProcessor::new(&mut db, &mut trie);
-    processor.apply_block(&block);
+    // === Capture Pre-State Root ===
+    let pre_state_root = trie.root_hash();
 
-    // Compute new state root
-    let new_root = trie.root_hash();
-    println!("New State Root: 0x{}", hex::encode(new_root));
+    // === Simulate Transactions for Post-State Root ===
+    let sim_processor = StateProcessor::new(&db, &mut trie);
+    let post_state_root = sim_processor.simulate_block(&transactions);
 
-    // Print resulting balances
-    println!("\nFinal Account Balances:");
+    // === Produce and Validate Block ===
+    let block = engine.produce_block(
+        transactions.clone(),
+        pre_state_root.clone(),
+        post_state_root.clone(),
+    );
+
+    println!("\n--- Produced Block ---\n{:#?}", block);
+
+    let is_valid = engine.validate_block(&block, pre_state_root.clone(), post_state_root.clone());
+    println!("Is Block Valid? {}\n", is_valid);
+
+    // === Commit Block to State ===
+    let mut processor = StateProcessor::new(&db, &mut trie);
+    let committed_root = processor.apply_block(&block);
+    println!("Committed State Root: 0x{}", hex::encode(&committed_root));
+
+    // === WASM Smart Contract Execution ===
+    let contracts_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src/contracts");
+    if Path::new(contracts_dir).exists() {
+        println!("\n--- Executing WASM Contracts ---");
+        for entry in fs::read_dir(contracts_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("wasm") {
+                println!("Running: {:?}", path);
+                let wasm_bytes = fs::read(&path)?;
+                let wasm_runtime = WasmRuntime::new(&wasm_bytes)?;
+                let result = wasm_runtime.execute_contract(&transactions, 10_000)?;
+                println!("Result: {}\n", result);
+            }
+        }
+    } else {
+        println!("\nContracts directory '{}' not found. Skipping WASM execution.", contracts_dir);
+    }
+
+    // === zk-SNARK Demonstration ===
+    println!("\n--- zk-SNARK Proof Demo ---");
+    zk::generate_and_verify_proof(3, 5)?;
+
+    // === Final Account Balances ===
+    println!("\n--- Final Account Balances ---");
     for account in ["Alice", "Bob", "Charlie", "Dave"] {
-        let balance = db.get(account.as_bytes())
-            .map(|bytes| u64::from_le_bytes(bytes.try_into().unwrap_or_default()))
-            .unwrap_or(0);
+        let balance = processor.get_balance(account);
         println!("{}: {}", account, balance);
     }
 

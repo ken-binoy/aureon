@@ -1,81 +1,92 @@
+use std::collections::HashMap;
+use sha2::{Sha256, Digest};
 use crate::types::{Block, Transaction};
 use crate::consensus::ConsensusEngine;
-use rand::prelude::*;
-use std::collections::HashMap;
 
 pub struct PoSConsensus {
-    // Mapping validator address => stake amount
-    pub validators: HashMap<String, u64>,
-    pub previous_hash: String,
+    validators: HashMap<String, u64>,
 }
 
 impl PoSConsensus {
     pub fn new(validators: HashMap<String, u64>) -> Self {
-        PoSConsensus {
-            validators,
-            previous_hash: "GENESIS".to_string(),
-        }
+        Self { validators }
     }
 
-    // Select validator randomly weighted by stake
-    fn select_validator(&self) -> Option<String> {
-        let total_stake: u64 = self.validators.values().sum();
-        if total_stake == 0 {
-            return None;
-        }
+    fn select_validator(&self) -> String {
+        self.validators
+            .iter()
+            .max_by_key(|&(_, stake)| stake)
+            .map(|(name, _)| name.clone())
+            .unwrap_or_else(|| "DefaultValidator".to_string())
+    }
 
-        let mut rng = rand::thread_rng();
-        let mut threshold = rng.gen_range(0..total_stake);
-
-        for (validator, stake) in &self.validators {
-            if *stake > threshold {
-                return Some(validator.clone());
-            }
-            threshold -= *stake;
-        }
-
-        None
+    fn hash_block_content(
+        transactions: &Vec<Transaction>,
+        previous_hash: &str,
+        validator: &str,
+        state_root: &[u8],
+    ) -> String {
+        let mut hasher = Sha256::new();
+        let tx_string: String = transactions.iter().map(|tx| format!("{:?}", tx)).collect();
+        hasher.update(tx_string.as_bytes());
+        hasher.update(previous_hash.as_bytes());
+        hasher.update(validator.as_bytes());
+        hasher.update(state_root);
+        let result = hasher.finalize();
+        hex::encode(result)
     }
 }
 
 impl ConsensusEngine for PoSConsensus {
-    fn validate_block(&self, block: &Block) -> bool {
-        // Validate block hash is not empty
-        if block.hash.is_empty() {
-            return false;
+    fn produce_block(
+        &self,
+        transactions: Vec<Transaction>,
+        pre_state_root: Vec<u8>,
+        post_state_root: Vec<u8>,
+    ) -> Block {
+        let previous_hash = "GENESIS".to_string();
+        let validator = self.select_validator();
+
+        let hash = Self::hash_block_content(
+            &transactions,
+            &previous_hash,
+            &validator,
+            &post_state_root,
+        );
+
+        Block {
+            transactions,
+            previous_hash,
+            nonce: 0,
+            hash,
+            pre_state_root,
+            post_state_root,
         }
-
-        // Extract validator address from hash string "POS-validator-txcount"
-        if !block.hash.starts_with("POS-") {
-            return false;
-        }
-
-        let parts: Vec<&str> = block.hash.split('-').collect();
-        if parts.len() < 3 {
-            return false;
-        }
-
-        let validator = parts[1];
-
-        // Validator must be in current validators list
-        self.validators.contains_key(validator)
     }
 
-    fn produce_block(&self, txs: Vec<Transaction>) -> Block {
-        // Select validator weighted by stake
-        let validator = match self.select_validator() {
-            Some(v) => v,
-            None => "no-validator".to_string(),
-        };
+    fn validate_block(
+        &self,
+        block: &Block,
+        _pre_state_root: Vec<u8>,
+        actual_post_state_root: Vec<u8>,
+    ) -> bool {
+        let validator = self.select_validator();
 
-        let block_hash = format!("POS-{}-{}", validator, txs.len());
+        let expected_hash = Self::hash_block_content(
+            &block.transactions,
+            &block.previous_hash,
+            &validator,
+            &actual_post_state_root,
+        );
 
-        // Create block with previous hash tracking (could be improved with chain state)
-        Block {
-            transactions: txs,
-            previous_hash: self.previous_hash.clone(),
-            nonce: 0, // PoS doesn't use nonce like PoW
-            hash: block_hash,
+        if expected_hash != block.hash {
+            return false;
         }
+
+        if block.post_state_root != actual_post_state_root {
+            return false;
+        }
+
+        true
     }
 }

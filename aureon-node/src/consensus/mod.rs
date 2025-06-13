@@ -6,8 +6,14 @@ use crate::consensus::{pow::PoWConsensus, pos::PoSConsensus};
 use crate::types::{Block, Transaction};
 
 pub trait ConsensusEngine {
-    fn validate_block(&self, block: &Block) -> bool;
-    fn produce_block(&self, transactions: Vec<Transaction>) -> Block;
+    fn produce_block(&self, transactions: Vec<Transaction>, pre_state_root: Vec<u8>, post_state_root: Vec<u8>) -> Block;
+
+    fn validate_block(
+        &self,
+        block: &Block,
+        pre_state_root: Vec<u8>,
+        actual_post_state_root: Vec<u8>,
+    ) -> bool;
 }
 
 #[derive(Debug)]
