@@ -7,6 +7,7 @@ mod mpt;
 mod db;
 mod state_processor;
 mod simulated_processor;
+mod network;
 
 use consensus::get_engine;
 use config::load_consensus_type;
@@ -16,10 +17,12 @@ use wasm::WasmRuntime;
 use std::fs;
 use std::path::Path;
 use std::collections::HashMap;
+use std::thread;
 
 use db::Db;
 use mpt::MerklePatriciaTrie;
 use state_processor::StateProcessor;
+use network::Network;
 
 fn main() -> anyhow::Result<()> {
     // === Load Consensus Type ===
@@ -28,6 +31,18 @@ fn main() -> anyhow::Result<()> {
 
     // === Initialize Consensus Engine ===
     let engine = get_engine(consensus_type);
+
+    // === Initialize Networking ===
+    let network = Network::new();
+    let network_clone = network.clone();
+
+    // Add peer addresses manually (adjust as needed)
+    network.add_peer("127.0.0.1:6001");
+    network.add_peer("127.0.0.1:6002");
+
+    thread::spawn(move || {
+        network_clone.listen("127.0.0.1:6000"); // Change port per node
+    });
 
     // === Sample Transactions ===
     let transactions = vec![
@@ -44,7 +59,7 @@ fn main() -> anyhow::Result<()> {
     ];
 
     // === Set up Database and Trie ===
-    let mut db = Db::open("aureon_db");
+    let db = Db::open("aureon_db");
     let mut trie = MerklePatriciaTrie::new();
 
     // === Initialize Account Balances ===
@@ -77,6 +92,9 @@ fn main() -> anyhow::Result<()> {
 
     let is_valid = engine.validate_block(&block, pre_state_root.clone(), post_state_root.clone());
     println!("Is Block Valid? {}\n", is_valid);
+
+    // === Broadcast the Block ===
+    network.broadcast_block(&block);
 
     // === Commit Block to State ===
     let mut processor = StateProcessor::new(&db, &mut trie);
