@@ -8,7 +8,10 @@ mod db;
 mod state_processor;
 mod simulated_processor;
 mod network;
-
+mod mempool;
+mod state;
+mod api;
+mod block;
 use consensus::get_engine;
 use config::load_consensus_type;
 use types::Transaction;
@@ -24,7 +27,30 @@ use mpt::MerklePatriciaTrie;
 use state_processor::StateProcessor;
 use network::Network;
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // === Start Axum API Server (non-blocking task) ===
+    let api_handle = tokio::spawn(async {
+        api::start_api_server().await;
+    });
+
+    // Optional: wait briefly to let API spin up before state logic starts
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+    // === Run Core Blockchain Logic ===
+    let node_handle = tokio::spawn(async {
+        if let Err(e) = run_node_logic().await {
+            eprintln!("Node logic error: {}", e);
+        }
+    });
+
+    // === Wait for both tasks (API and logic) ===
+    let _ = tokio::try_join!(api_handle, node_handle)?;
+
+    Ok(())
+}
+
+async fn run_node_logic() -> anyhow::Result<()> {
     // === Load Consensus Type ===
     let consensus_type = load_consensus_type();
     println!("Selected Consensus: {:?}", consensus_type);
