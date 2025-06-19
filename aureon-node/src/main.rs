@@ -25,6 +25,13 @@ use state_processor::StateProcessor;
 use network::Network;
 
 fn main() -> anyhow::Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+
+    // === Execute Contract Mode (Skip full node setup) ===
+    if args.len() > 1 && args[1] == "execute-contract" {
+        return run_execute_contract();
+    }
+
     // === Load Consensus Type ===
     let consensus_type = load_consensus_type();
     println!("Selected Consensus: {:?}", consensus_type);
@@ -130,6 +137,31 @@ fn main() -> anyhow::Result<()> {
         let balance = processor.get_balance(account);
         println!("{}: {}", account, balance);
     }
+
+    Ok(())
+}
+
+fn run_execute_contract() -> anyhow::Result<()> {
+    use std::env;
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 5 {
+        println!("Usage: execute-contract <contract_hash> <caller> <gas_limit> --input_args <arg1,arg2,...>");
+        std::process::exit(1);
+    }
+
+    let contract_hash = &args[2];
+    let caller = &args[3];
+    let gas_limit: u64 = args[4].parse()?;
+    let input_args = if args.len() > 6 && args[5] == "--input_args" {
+        args[6].split(',').map(|s| s.to_string()).collect::<Vec<_>>()
+    } else {
+        vec![]
+    };
+
+    println!("Executing contract {} as {} with gas {} and args {:?}", contract_hash, caller, gas_limit, input_args);
+
+    // Placeholder for actual contract execution logic
+    // You can reuse WasmRuntime or your internal execution pipeline here
 
     Ok(())
 }
