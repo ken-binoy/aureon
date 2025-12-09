@@ -16,6 +16,8 @@ use crate::contract_registry::ContractRegistry;
 use crate::wasm::WasmRuntime;
 use crate::indexer::BlockchainIndexer;
 use crate::mempool::TransactionMempool;
+use crate::metrics::Metrics;
+use crate::monitoring::monitoring_router;
 
 // ============================================================================
 // Request/Response Structs
@@ -127,6 +129,7 @@ pub struct ApiState {
     pub contract_registry: Arc<Mutex<ContractRegistry>>,
     pub indexer: Arc<BlockchainIndexer>,
     pub mempool: Arc<TransactionMempool>,
+    pub metrics: Arc<Metrics>,
 }
 
 // ============================================================================
@@ -466,12 +469,14 @@ pub async fn start_api_server(
     contract_registry: Arc<Mutex<ContractRegistry>>,
     indexer: Arc<BlockchainIndexer>,
     mempool: Arc<TransactionMempool>,
+    metrics: Arc<Metrics>,
 ) -> anyhow::Result<()> {
     let state = ApiState {
         db,
         contract_registry,
         indexer,
         mempool,
+        metrics: metrics.clone(),
     };
 
     let app = Router::new()
@@ -491,10 +496,13 @@ pub async fn start_api_server(
         .route("/subscribe", get(subscribe))
         // Mempool (Phase 5.3)
         .route("/mempool", get(get_mempool))
-        .with_state(state);
+        .with_state(state)
+        .nest("/", monitoring_router(metrics));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     println!("📡 Aureon API listening on http://0.0.0.0:8080 (access via http://127.0.0.1:8080 locally)");
+    println!("📊 Prometheus metrics: http://0.0.0.0:8080/metrics");
+    println!("💚 Health check: http://0.0.0.0:8080/health");
 
     let listener = TcpListener::bind(&addr).await?;
     serve(listener, app).await?;

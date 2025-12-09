@@ -16,6 +16,9 @@ mod block_producer;
 mod crypto;
 mod sync;
 mod multinode_test;
+mod metrics;
+mod logging;
+mod monitoring;
 
 use consensus::get_engine;
 use config::AureonConfig;
@@ -35,6 +38,7 @@ use contract_registry::ContractRegistry;
 use api::start_api_server;
 use indexer::BlockchainIndexer;
 use mempool::TransactionMempool;
+use metrics::Metrics;
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
@@ -54,7 +58,7 @@ fn main() -> anyhow::Result<()> {
         return run_execute_contract();
     }
 
-    // === Load Configuration ===
+    // === Load Configuration ==
     let config = AureonConfig::load();
     
     // Validate configuration
@@ -194,16 +198,31 @@ fn main() -> anyhow::Result<()> {
     );
     producer.start();
 
+    // === Initialize Logging ===
+    let _ = logging::init_logging(&config.logging.level);
+
+    // === Initialize Metrics ===
+    let metrics = Arc::new(Metrics::new()?);
+    
+    // Update initial metrics
+    if let Ok(Some(height)) = indexer.get_latest_block_number() {
+        metrics.chain_height.set(height as i64);
+    }
+    metrics.pow_difficulty.set(config.consensus.pow_difficulty as i64);
+    metrics.pos_validators.set(config.consensus.pos_validator_count as i64);
+
     // === Start REST API Server ===
     let contract_registry = Arc::new(Mutex::new(ContractRegistry::new()));
     
     println!("\n--- Starting REST API Server ---");
     println!("Node is running. Press Ctrl+C to stop.");
+    println!("Metrics endpoint: http://{}:8080/metrics", config.api.host);
+    println!("Health check: http://{}:8080/health", config.api.host);
     
     // Block on the async API server (will run forever until interrupted)
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(async {
-        if let Err(e) = start_api_server(db_arc, contract_registry, indexer, mempool).await {
+        if let Err(e) = start_api_server(db_arc, contract_registry, indexer, mempool, metrics).await {
             eprintln!("API Server error: {}", e);
         }
     });
