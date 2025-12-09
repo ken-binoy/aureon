@@ -1,0 +1,39 @@
+# Ignore version control
+.git
+.gitignore
+.github
+
+# Ignore documentation
+*.md
+docs/
+
+# Ignore IDE files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Ignore build artifacts (except target which we need)
+*.o
+*.so
+*.dylib
+
+# Ignore test/example files
+tests/
+examples/
+test_*.rs
+
+# Ignore misc files
+*.log
+.env
+.env.local
+node_modules/
+
+# Ignore audit
+audit-*.txt
+
+# Keep only release build
+target/debug/
+target/doc/

@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # Node 1 - Bootstrap node
+  aureon-node-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aureon-node-1
+    ports:
+      - "6000:6000"   # P2P network
+      - "8000:8080"   # REST API
+    environment:
+      RUST_LOG: info
+      AUREON_API_HOST: 0.0.0.0
+      AUREON_API_PORT: 8080
+      AUREON_CONSENSUS_ENGINE: pow
+      AUREON_POW_DIFFICULTY: 2
+      AUREON_DB_PATH: /app/aureon_db_1
+    volumes:
+      - node1_data:/app/aureon_db_1
+      - ./config.toml:/app/config.toml:ro
+    networks:
+      - aureon_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/chain/head"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Node 2
+  aureon-node-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aureon-node-2
+    ports:
+      - "6001:6000"   # P2P network
+      - "8001:8080"   # REST API
+    environment:
+      RUST_LOG: info
+      AUREON_API_HOST: 0.0.0.0
+      AUREON_API_PORT: 8080
+      AUREON_CONSENSUS_ENGINE: pow
+      AUREON_POW_DIFFICULTY: 2
+      AUREON_DB_PATH: /app/aureon_db_2
+    volumes:
+      - node2_data:/app/aureon_db_2
+      - ./config.toml:/app/config.toml:ro
+    networks:
+      - aureon_network
+    depends_on:
+      aureon-node-1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/chain/head"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Node 3
+  aureon-node-3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aureon-node-3
+    ports:
+      - "6002:6000"   # P2P network
+      - "8002:8080"   # REST API
+    environment:
+      RUST_LOG: info
+      AUREON_API_HOST: 0.0.0.0
+      AUREON_API_PORT: 8080
+      AUREON_CONSENSUS_ENGINE: pow
+      AUREON_POW_DIFFICULTY: 2
+      AUREON_DB_PATH: /app/aureon_db_3
+    volumes:
+      - node3_data:/app/aureon_db_3
+      - ./config.toml:/app/config.toml:ro
+    networks:
+      - aureon_network
+    depends_on:
+      aureon-node-1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/chain/head"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+networks:
+  aureon_network:
+    driver: bridge
+
+volumes:
+  node1_data:
+  node2_data:
+  node3_data:

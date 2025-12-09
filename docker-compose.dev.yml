@@ -1,0 +1,101 @@
+version: '3.8'
+
+# Development docker-compose with PoS consensus for testing
+services:
+  # Bootstrap node for PoS testing
+  aureon-validator-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aureon-validator-1
+    ports:
+      - "6010:6000"   # P2P network
+      - "8010:8080"   # REST API
+    environment:
+      RUST_LOG: debug
+      AUREON_API_HOST: 0.0.0.0
+      AUREON_API_PORT: 8080
+      AUREON_CONSENSUS_ENGINE: pos
+      AUREON_POS_MIN_STAKE: 1000
+      AUREON_DB_PATH: /app/aureon_db_v1
+    volumes:
+      - validator1_data:/app/aureon_db_v1
+      - ./config.toml:/app/config.toml:ro
+    networks:
+      - aureon_dev_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/chain/head"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Validator 2
+  aureon-validator-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aureon-validator-2
+    ports:
+      - "6011:6000"   # P2P network
+      - "8011:8080"   # REST API
+    environment:
+      RUST_LOG: debug
+      AUREON_API_HOST: 0.0.0.0
+      AUREON_API_PORT: 8080
+      AUREON_CONSENSUS_ENGINE: pos
+      AUREON_POS_MIN_STAKE: 1000
+      AUREON_DB_PATH: /app/aureon_db_v2
+    volumes:
+      - validator2_data:/app/aureon_db_v2
+      - ./config.toml:/app/config.toml:ro
+    networks:
+      - aureon_dev_network
+    depends_on:
+      aureon-validator-1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/chain/head"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Regular node (non-validator)
+  aureon-node:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aureon-node
+    ports:
+      - "6020:6000"   # P2P network
+      - "8020:8080"   # REST API
+    environment:
+      RUST_LOG: debug
+      AUREON_API_HOST: 0.0.0.0
+      AUREON_API_PORT: 8080
+      AUREON_CONSENSUS_ENGINE: pos
+      AUREON_DB_PATH: /app/aureon_db_node
+    volumes:
+      - node_data:/app/aureon_db_node
+      - ./config.toml:/app/config.toml:ro
+    networks:
+      - aureon_dev_network
+    depends_on:
+      aureon-validator-1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/chain/head"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+networks:
+  aureon_dev_network:
+    driver: bridge
+
+volumes:
+  validator1_data:
+  validator2_data:
+  node_data:
