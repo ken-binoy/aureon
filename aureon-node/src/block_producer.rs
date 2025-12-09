@@ -4,9 +4,9 @@ use crate::mempool::TransactionMempool;
 use crate::indexer::BlockchainIndexer;
 use crate::metrics::Metrics;
 use crate::network::Network;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Background task that produces blocks from mempool transactions at regular intervals
 pub struct BlockProducer {
@@ -174,5 +174,25 @@ mod tests {
         // Cleanup
         let _ = std::fs::remove_dir_all("test_db");
     }
+}
+
+/// Utility function to route transactions to shards
+/// Used in sharding-aware block production
+#[allow(dead_code)]
+pub fn route_transactions_to_shards(
+    transactions: Vec<Transaction>,
+    num_shards: u32,
+) -> std::collections::HashMap<u32, Vec<Transaction>> {
+    use std::collections::HashMap;
+    
+    let mut sharded_txs = HashMap::new();
+    let coordinator = crate::shard_coordinator::ShardCoordinator::with_shard_count(num_shards);
+    
+    for tx in transactions {
+        let shard_id = coordinator.get_shard(&tx.from).as_u32();
+        sharded_txs.entry(shard_id).or_insert_with(Vec::new).push(tx);
+    }
+    
+    sharded_txs
 }
 
