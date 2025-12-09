@@ -33,6 +33,10 @@ mod error_recovery;
 mod performance;
 mod stress_testing;
 mod production_monitoring;
+mod security_assessment;
+mod cryptographic_review;
+mod network_security;
+mod access_control;
 
 use consensus::get_engine;
 use config::AureonConfig;
