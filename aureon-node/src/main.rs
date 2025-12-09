@@ -27,6 +27,8 @@ mod shard_sync;
 mod light_block_header;
 mod merkle_tree;
 mod spv_client;
+mod state_compression;
+mod spv_api;
 
 use consensus::get_engine;
 use config::AureonConfig;
@@ -97,7 +99,7 @@ fn main() -> anyhow::Result<()> {
     });
 
     // === Initialize Block Synchronization State ===
-    let sync_state = std::sync::Arc::new(std::sync::Mutex::new(sync::BlockSyncState::new()));
+    let _sync_state = std::sync::Arc::new(std::sync::Mutex::new(sync::BlockSyncState::new()));
     
     // === Sample Transactions ===
     let transactions = vec![
