@@ -29,6 +29,10 @@ mod merkle_tree;
 mod spv_client;
 mod state_compression;
 mod spv_api;
+mod error_recovery;
+mod performance;
+mod stress_testing;
+mod production_monitoring;
 
 use consensus::get_engine;
 use config::AureonConfig;
