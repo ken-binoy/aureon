@@ -24,6 +24,9 @@ mod shard_coordinator;
 mod shard_manager;
 mod cross_shard_protocol;
 mod shard_sync;
+mod light_block_header;
+mod merkle_tree;
+mod spv_client;
 
 use consensus::get_engine;
 use config::AureonConfig;
