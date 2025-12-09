@@ -19,6 +19,7 @@ mod multinode_test;
 mod metrics;
 mod logging;
 mod monitoring;
+mod metrics_tracker;
 
 use consensus::get_engine;
 use config::AureonConfig;
@@ -189,15 +190,6 @@ fn main() -> anyhow::Result<()> {
     // === Create Arc for database early ===
     let db_arc = Arc::new(db);
 
-    // === Start Block Producer ===
-    let producer = block_producer::BlockProducer::new(
-        mempool.clone(),
-        db_arc.clone(),
-        indexer.clone(),
-        5000, // Produce a block every 5 seconds
-    );
-    producer.start();
-
     // === Initialize Logging ===
     let _ = logging::init_logging(&config.logging.level);
 
@@ -210,6 +202,23 @@ fn main() -> anyhow::Result<()> {
     }
     metrics.pow_difficulty.set(config.consensus.pow_difficulty as i64);
     metrics.pos_validators.set(config.consensus.pos_validator_count as i64);
+
+    // === Start Block Producer ===
+    let producer = block_producer::BlockProducer::new(
+        mempool.clone(),
+        db_arc.clone(),
+        indexer.clone(),
+        metrics.clone(),
+        5000, // Produce a block every 5 seconds
+    );
+    producer.start();
+
+    // === Start Metrics Tracker ===
+    metrics_tracker::MetricsTracker::start_mempool_tracker(
+        metrics.clone(),
+        mempool.clone(),
+        1000, // Update every 1 second
+    );
 
     // === Start REST API Server ===
     let contract_registry = Arc::new(Mutex::new(ContractRegistry::new()));

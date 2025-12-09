@@ -2,18 +2,18 @@ use crate::types::Transaction;
 use crate::db::Db;
 use crate::mempool::TransactionMempool;
 use crate::indexer::BlockchainIndexer;
-use crate::mpt::MerklePatriciaTrie;
-use crate::state_processor::StateProcessor;
+use crate::metrics::Metrics;
 use crate::network::Network;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Background task that produces blocks from mempool transactions at regular intervals
 pub struct BlockProducer {
     mempool: Arc<TransactionMempool>,
     db: Arc<Db>,
     indexer: Arc<BlockchainIndexer>,
+    metrics: Arc<Metrics>,
     block_interval_ms: u64,
 }
 
@@ -23,12 +23,14 @@ impl BlockProducer {
         mempool: Arc<TransactionMempool>,
         db: Arc<Db>,
         indexer: Arc<BlockchainIndexer>,
+        metrics: Arc<Metrics>,
         block_interval_ms: u64,
     ) -> Self {
         BlockProducer {
             mempool,
             db,
             indexer,
+            metrics,
             block_interval_ms,
         }
     }
@@ -84,6 +86,10 @@ impl BlockProducer {
     fn produce_block_info(&self, transactions: Vec<Transaction>, block_number: u64) {
         println!("\n--- Block #{} Produced from Mempool ---", block_number);
         println!("Transactions included: {}", transactions.len());
+        
+        // Update metrics
+        self.metrics.blocks_produced.inc();
+        self.metrics.transactions_processed.inc_by(transactions.len() as u64);
         
         // Calculate total gas
         let total_gas: u64 = transactions.iter().map(|_tx| 21000).sum();
@@ -157,10 +163,12 @@ mod tests {
     #[test]
     fn test_block_producer_creation() {
         // Just verify we can create a block producer without panicking
+        let metrics = Arc::new(Metrics::new().unwrap());
         let _producer = BlockProducer::new(
             Arc::new(TransactionMempool::new()),
             Arc::new(Db::open("test_db")),
             Arc::new(BlockchainIndexer::new()),
+            metrics,
             1000,
         );
         // Cleanup

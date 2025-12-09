@@ -156,6 +156,7 @@ async fn submit_transaction(
 ) -> Json<TransactionResponse> {
     // Validate transaction
     if payload.from.is_empty() || payload.to.is_empty() {
+        state.metrics.transactions_failed.inc();
         return Json(TransactionResponse {
             status: "error".to_string(),
             message: "Invalid sender or recipient".to_string(),
@@ -163,6 +164,7 @@ async fn submit_transaction(
     }
 
     if payload.amount == 0 {
+        state.metrics.transactions_failed.inc();
         return Json(TransactionResponse {
             status: "error".to_string(),
             message: "Amount must be greater than 0".to_string(),
@@ -174,15 +176,17 @@ async fn submit_transaction(
 
     match state.mempool.add_transaction(tx) {
         Ok(tx_hash) => {
+            state.metrics.transactions_submitted.inc();
             Json(TransactionResponse {
                 status: "success".to_string(),
                 message: format!("Transaction {} added to mempool", tx_hash),
             })
         }
         Err(e) => {
+            state.metrics.transactions_failed.inc();
             Json(TransactionResponse {
                 status: "error".to_string(),
-                message: format!("Failed to add transaction to mempool: {}", e),
+                message: format!("Failed to add transaction: {}", e),
             })
         }
     }
@@ -194,6 +198,7 @@ async fn submit_signed_transaction(
 ) -> Json<TransactionResponse> {
     // Validate transaction
     if payload.from.is_empty() || payload.to.is_empty() {
+        state.metrics.transactions_failed.inc();
         return Json(TransactionResponse {
             status: "error".to_string(),
             message: "Invalid sender or recipient".to_string(),
@@ -201,6 +206,7 @@ async fn submit_signed_transaction(
     }
 
     if payload.amount == 0 {
+        state.metrics.transactions_failed.inc();
         return Json(TransactionResponse {
             status: "error".to_string(),
             message: "Amount must be greater than 0".to_string(),
@@ -211,6 +217,7 @@ async fn submit_signed_transaction(
     let public_key = match hex::decode(&payload.public_key) {
         Ok(pk) => pk,
         Err(_) => {
+            state.metrics.transactions_failed.inc();
             return Json(TransactionResponse {
                 status: "error".to_string(),
                 message: "Invalid public key format (must be hex)".to_string(),
@@ -221,6 +228,7 @@ async fn submit_signed_transaction(
     let signature = match hex::decode(&payload.signature) {
         Ok(sig) => sig,
         Err(_) => {
+            state.metrics.transactions_failed.inc();
             return Json(TransactionResponse {
                 status: "error".to_string(),
                 message: "Invalid signature format (must be hex)".to_string(),
@@ -237,12 +245,14 @@ async fn submit_signed_transaction(
     // Add to mempool (signature verification happens here)
     match state.mempool.add_transaction(tx) {
         Ok(tx_hash) => {
+            state.metrics.transactions_submitted.inc();
             Json(TransactionResponse {
                 status: "success".to_string(),
                 message: format!("Signed transaction {} added to mempool", tx_hash),
             })
         }
         Err(e) => {
+            state.metrics.transactions_failed.inc();
             Json(TransactionResponse {
                 status: "error".to_string(),
                 message: format!("Failed to add transaction: {}", e),
