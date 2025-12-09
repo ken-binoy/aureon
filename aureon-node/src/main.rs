@@ -37,6 +37,10 @@ mod security_assessment;
 mod cryptographic_review;
 mod network_security;
 mod access_control;
+mod community_governance;
+mod mainnet_deployment;
+mod incentive_programs;
+mod testnet_coordination;
 
 use consensus::get_engine;
 use config::AureonConfig;
