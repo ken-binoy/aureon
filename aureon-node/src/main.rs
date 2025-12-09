@@ -20,6 +20,10 @@ mod metrics;
 mod logging;
 mod monitoring;
 mod metrics_tracker;
+mod shard_coordinator;
+mod shard_manager;
+mod cross_shard_protocol;
+mod shard_sync;
 
 use consensus::get_engine;
 use config::AureonConfig;

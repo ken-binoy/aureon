@@ -110,3 +110,13 @@ pub struct Block {
     pub pre_state_root: Vec<u8>,
     pub post_state_root: Vec<u8>,
 }
+
+/// Represents an account in shard state
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Account {
+    pub address: String,
+    pub balance: u64,
+    pub nonce: u64,
+    pub code: Vec<u8>,
+    pub storage: std::collections::HashMap<String, Vec<u8>>,
+}
