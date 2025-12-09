@@ -1,0 +1,85 @@
+# Aureon Blockchain Configuration
+# This file controls consensus engine selection, validator settings, and network parameters
+# Can be overridden with AUREON_* environment variables
+
+[consensus]
+# Options: "pow", "pos", "poa"
+# - pow: Proof of Work - computationally expensive block mining
+# - pos: Proof of Stake - validator selection based on stake weight
+# - poa: Proof of Authority - validator approval for block creation
+engine = "poa"
+
+# Difficulty target for PoW (higher = harder mining)
+# Range: 1-256 (typical: 4-16 for testing, 16+ for production)
+pow_difficulty = 4
+
+# Minimum stake for PoS validators (in tokens)
+pos_min_stake = 1000
+
+# Number of active validators for PoS
+pos_validator_count = 21
+
+# PoA validators list (addresses that can create blocks)
+poa_validators = ["alice", "bob", "charlie"]
+
+[network]
+# Listen address for P2P network
+listen_addr = "127.0.0.1"
+listen_port = 6000
+
+# Bootstrap peers to connect to on startup
+# Format: "IP:PORT"
+bootstrap_peers = [
+    "127.0.0.1:6001",
+    "127.0.0.1:6002",
+]
+
+[api]
+# REST API server configuration
+enabled = true
+host = "0.0.0.0"
+port = 8080
+
+# Enable WebSocket support (Phase 5.2)
+websocket_enabled = false
+websocket_port = 8081
+
+[database]
+# Path to RocksDB storage
+path = "aureon_db"
+
+# Cache size in MB
+cache_size_mb = 512
+
+# Enable compression
+compression = true
+
+[state]
+# Initial account balances for genesis block
+# Format: account_name = balance_in_tokens
+[state.accounts]
+alice = 100
+bob = 100
+charlie = 100
+dave = 50
+eve = 50
+
+[validator]
+# Validator stake (only used for PoS/PoA)
+stake = 10000
+
+# Validator public key (optional, for multi-validator setup)
+public_key = ""
+
+# Validator operator address
+operator_address = "validator1"
+
+[logging]
+# Log level: "debug", "info", "warn", "error"
+level = "info"
+
+# Enable detailed consensus logs
+consensus_debug = false
+
+# Enable network trace logs
+network_trace = false

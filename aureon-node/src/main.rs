@@ -8,78 +8,105 @@ mod db;
 mod state_processor;
 mod simulated_processor;
 mod network;
+mod contract_registry;
+mod api;
+mod indexer;
+mod mempool;
+mod block_producer;
+mod crypto;
+mod sync;
+mod multinode_test;
 
 use consensus::get_engine;
-use config::load_consensus_type;
+use config::AureonConfig;
 use types::Transaction;
 use wasm::WasmRuntime;
 
 use std::fs;
 use std::path::Path;
-use std::collections::HashMap;
 use std::thread;
+use std::sync::{Arc, Mutex};
 
 use db::Db;
 use mpt::MerklePatriciaTrie;
 use state_processor::StateProcessor;
 use network::Network;
+use contract_registry::ContractRegistry;
+use api::start_api_server;
+use indexer::BlockchainIndexer;
+use mempool::TransactionMempool;
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
+
+    // === Generate Keypair Mode ===
+    if args.len() > 1 && args[1] == "keygen" {
+        let (secret, public) = crypto::generate_keypair();
+        println!("Generated Ed25519 keypair:");
+        println!("Secret Key: {}", secret);
+        println!("Public Key: {}", public);
+        println!("\nStore the secret key safely. Use it to sign transactions.");
+        return Ok(());
+    }
 
     // === Execute Contract Mode (Skip full node setup) ===
     if args.len() > 1 && args[1] == "execute-contract" {
         return run_execute_contract();
     }
 
-    // === Load Consensus Type ===
-    let consensus_type = load_consensus_type();
-    println!("Selected Consensus: {:?}", consensus_type);
+    // === Load Configuration ===
+    let config = AureonConfig::load();
+    
+    // Validate configuration
+    if let Err(e) = config.validate() {
+        eprintln!("Configuration error: {}", e);
+        std::process::exit(1);
+    }
+
+    // Print configuration summary
+    config.print_summary();
 
     // === Initialize Consensus Engine ===
+    let consensus_type = config.get_consensus_type();
     let engine = get_engine(consensus_type);
 
     // === Initialize Networking ===
-    let network = Network::new();
+    let network = Network::new("aureon-node".to_string(), "1.0.0".to_string());
     let network_clone = network.clone();
 
-    // Add peer addresses manually (adjust as needed)
-    network.add_peer("127.0.0.1:6001");
-    network.add_peer("127.0.0.1:6002");
+    // Add peer addresses from config
+    for peer in &config.network.bootstrap_peers {
+        network.add_peer(peer, None);
+    }
 
+    let listen_addr = format!("{}:{}", config.network.listen_addr, config.network.listen_port);
     thread::spawn(move || {
-        network_clone.listen("127.0.0.1:6000"); // Change port per node
+        network_clone.listen(&listen_addr);
     });
 
+    // === Initialize Block Synchronization State ===
+    let sync_state = std::sync::Arc::new(std::sync::Mutex::new(sync::BlockSyncState::new()));
+    
     // === Sample Transactions ===
     let transactions = vec![
-        Transaction {
-            from: "Alice".into(),
-            to: "Bob".into(),
-            amount: 50,
-        },
-        Transaction {
-            from: "Charlie".into(),
-            to: "Dave".into(),
-            amount: 75,
-        },
+        Transaction::transfer("Alice".into(), "Bob".into(), 50),
+        Transaction::transfer("Charlie".into(), "Dave".into(), 75),
     ];
 
     // === Set up Database and Trie ===
-    let db = Db::open("aureon_db");
+    let db = Db::open(&config.database.path);
     let mut trie = MerklePatriciaTrie::new();
 
-    // === Initialize Account Balances ===
-    let initial_balances: HashMap<&str, u64> = [
-        ("Alice", 100),
-        ("Charlie", 100),
-    ]
-    .into();
-
-    for (account, balance) in &initial_balances {
+    // === Initialize Account Balances from Config ===
+    for (account, balance) in &config.state.accounts {
         db.put(account.as_bytes(), &balance.to_le_bytes());
         trie.insert(account.as_bytes().to_vec(), balance.to_le_bytes().to_vec());
     }
+
+    println!("Initialized {} genesis accounts", config.state.accounts.len());
+
+    // === Create Blockchain Indexer ===
+    let indexer = Arc::new(BlockchainIndexer::new());
 
     // === Capture Pre-State Root ===
     let pre_state_root = trie.root_hash();
@@ -100,6 +127,14 @@ fn main() -> anyhow::Result<()> {
     let is_valid = engine.validate_block(&block, pre_state_root.clone(), post_state_root.clone());
     println!("Is Block Valid? {}\n", is_valid);
 
+    // === Index the Block ===
+    if let Err(e) = indexer.index_block(block.clone(), 0, std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()) {
+        eprintln!("Warning: Failed to index block: {}", e);
+    }
+
     // === Broadcast the Block ===
     network.broadcast_block(&block);
 
@@ -118,9 +153,15 @@ fn main() -> anyhow::Result<()> {
             if path.extension().and_then(|s| s.to_str()) == Some("wasm") {
                 println!("Running: {:?}", path);
                 let wasm_bytes = fs::read(&path)?;
-                let wasm_runtime = WasmRuntime::new(&wasm_bytes)?;
-                let result = wasm_runtime.execute_contract(&transactions, 10_000)?;
-                println!("Result: {}\n", result);
+                match WasmRuntime::new(&wasm_bytes) {
+                    Ok(wasm_runtime) => {
+                        match wasm_runtime.execute_contract(&transactions, 10_000) {
+                            Ok(result) => println!("Result: {}\n", result),
+                            Err(e) => println!("Execution error: {}\n", e),
+                        }
+                    }
+                    Err(e) => println!("Load error: {}\n", e),
+                }
             }
         }
     } else {
@@ -137,6 +178,35 @@ fn main() -> anyhow::Result<()> {
         let balance = processor.get_balance(account);
         println!("{}: {}", account, balance);
     }
+
+    // === Create Transaction Mempool ===
+    let mempool = Arc::new(TransactionMempool::new());
+
+    // === Create Arc for database early ===
+    let db_arc = Arc::new(db);
+
+    // === Start Block Producer ===
+    let producer = block_producer::BlockProducer::new(
+        mempool.clone(),
+        db_arc.clone(),
+        indexer.clone(),
+        5000, // Produce a block every 5 seconds
+    );
+    producer.start();
+
+    // === Start REST API Server ===
+    let contract_registry = Arc::new(Mutex::new(ContractRegistry::new()));
+    
+    println!("\n--- Starting REST API Server ---");
+    println!("Node is running. Press Ctrl+C to stop.");
+    
+    // Block on the async API server (will run forever until interrupted)
+    let runtime = tokio::runtime::Runtime::new()?;
+    runtime.block_on(async {
+        if let Err(e) = start_api_server(db_arc, contract_registry, indexer, mempool).await {
+            eprintln!("API Server error: {}", e);
+        }
+    });
 
     Ok(())
 }

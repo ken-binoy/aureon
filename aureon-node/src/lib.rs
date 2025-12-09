@@ -2,6 +2,9 @@ use aureon_core::types::{Block, Transaction, BlockHeader};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+pub mod crypto;
+pub mod key_utils;
+
 pub struct Blockchain {
     pub blocks: Vec<Block>,
     pub state: HashMap<String, u64>,

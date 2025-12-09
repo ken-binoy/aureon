@@ -16,10 +16,11 @@ pub trait ConsensusEngine {
     ) -> bool;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum ConsensusType {
     PoW,
     PoS,
+    PoA,
 }
 
 pub fn get_engine(consensus_type: ConsensusType) -> Box<dyn ConsensusEngine> {
@@ -29,6 +30,15 @@ pub fn get_engine(consensus_type: ConsensusType) -> Box<dyn ConsensusEngine> {
             let mut validators = HashMap::new();
             validators.insert("Alice".to_string(), 100);
             validators.insert("Bob".to_string(), 200);
+            Box::new(PoSConsensus::new(validators))
+        }
+        ConsensusType::PoA => {
+            // PoA uses PoS engine with authority-based validator set
+            // In production, validators would be loaded from config
+            let mut validators = HashMap::new();
+            validators.insert("alice".to_string(), 100);
+            validators.insert("bob".to_string(), 100);
+            validators.insert("charlie".to_string(), 100);
             Box::new(PoSConsensus::new(validators))
         }
     }

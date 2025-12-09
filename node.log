@@ -1,0 +1,142 @@
+Selected Consensus: PoW
+Failed to connect to peer: 127.0.0.1:6001
+Failed to connect to peer: 127.0.0.1:6002
+Listening on 127.0.0.1:6000
+
+--- Produced Block ---
+Block {
+    transactions: [
+        Transaction {
+            from: "Alice",
+            nonce: 0,
+            gas_price: 1,
+            payload: Transfer {
+                to: "Bob",
+                amount: 50,
+            },
+            signature: [],
+        },
+        Transaction {
+            from: "Charlie",
+            nonce: 0,
+            gas_price: 1,
+            payload: Transfer {
+                to: "Dave",
+                amount: 75,
+            },
+            signature: [],
+        },
+    ],
+    previous_hash: "GENESIS",
+    nonce: 138438,
+    hash: "00004c67f3dd5a611cf870db380734205006340d99e7de9057fe5d3b99856c84",
+    pre_state_root: [
+        132,
+        254,
+        44,
+        110,
+        128,
+        133,
+        231,
+        141,
+        39,
+        195,
+        21,
+        95,
+        54,
+        22,
+        122,
+        210,
+        153,
+        79,
+        190,
+        206,
+        51,
+        184,
+        56,
+        19,
+        145,
+        157,
+        157,
+        106,
+        21,
+        168,
+        120,
+        71,
+    ],
+    post_state_root: [
+        108,
+        176,
+        112,
+        65,
+        209,
+        123,
+        36,
+        73,
+        255,
+        177,
+        126,
+        70,
+        65,
+        73,
+        94,
+        200,
+        2,
+        210,
+        81,
+        167,
+        195,
+        113,
+        255,
+        62,
+        75,
+        246,
+        138,
+        175,
+        227,
+        111,
+        78,
+        199,
+    ],
+}
+Is Block Valid? true
+
+Committed State Root: 0x6cb07041d17b2449ffb17e4641495ec802d251a7c371ff3e4bf68aafe36f4ec7
+
+--- Executing WASM Contracts ---
+Running: "/Users/kenbinoy/aureon-chain/aureon-node/src/contracts/sum_amounts.wasm"
+[WASM LOG]: Summing all amounts
+Gas used: 10
+Result: Contract executed successfully
+
+Running: "/Users/kenbinoy/aureon-chain/aureon-node/src/contracts/transfer_success.wasm"
+[WASM LOG]: Transfer executed
+Gas used: 10
+Result: Contract executed successfully
+
+Running: "/Users/kenbinoy/aureon-chain/aureon-node/src/contracts/hello.wasm"
+[WASM LOG]: Hello from WASM!
+Gas used: 10
+Result: Contract executed successfully
+
+Running: "/Users/kenbinoy/aureon-chain/aureon-node/src/contracts/mint_tokens.wasm"
+[WASM LOG]: Tokens minted successfully
+Gas used: 10
+Result: Contract executed successfully
+
+
+--- zk-SNARK Proof Demo ---
+Setting up Groth16 parameters...
+Generating proof for 3 * 5 = 15...
+Verifying proof...
+ Proof verified successfully!
+
+--- Final Account Balances ---
+Alice: 50
+Bob: 50
+Charlie: 25
+Dave: 75
+
+--- Starting REST API Server ---
+Node is running. Press Ctrl+C to stop.
+📡 Aureon API listening on http://0.0.0.0:8080 (access via http://127.0.0.1:8080 locally)

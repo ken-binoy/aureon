@@ -1,6 +1,6 @@
 use crate::db::{Db, SnapshotDb};
 use crate::mpt::MerklePatriciaTrie;
-use crate::types::{Block, Transaction};
+use crate::types::{Block, Transaction, TransactionPayload};
 use crate::simulated_processor::SimulatedProcessor;
 
 pub struct StateProcessor<'a> {
@@ -15,15 +15,48 @@ impl<'a> StateProcessor<'a> {
 
     pub fn apply_block(&mut self, block: &Block) -> Vec<u8> {
         for tx in &block.transactions {
-            let from_balance = self.get_balance(&tx.from);
-            if from_balance < tx.amount {
-                continue;
-            }
-            let to_balance = self.get_balance(&tx.to);
-            self.set_balance(&tx.from, from_balance - tx.amount);
-            self.set_balance(&tx.to, to_balance + tx.amount);
+            self.apply_transaction(tx);
         }
         self.trie.root_hash()
+    }
+
+    /// Apply a single transaction to state
+    pub fn apply_transaction(&mut self, tx: &Transaction) {
+        match &tx.payload {
+            TransactionPayload::Transfer { to, amount } => {
+                let from_balance = self.get_balance(&tx.from);
+                if from_balance >= *amount {
+                    let to_balance = self.get_balance(to);
+                    self.set_balance(&tx.from, from_balance - *amount);
+                    self.set_balance(to, to_balance + *amount);
+                }
+            }
+            TransactionPayload::ContractDeploy { code: _, gas_limit: _ } => {
+                // Contract deployment will be handled by upper layer
+                // This is a placeholder for now
+            }
+            TransactionPayload::ContractCall {
+                contract_address: _,
+                function: _,
+                args: _,
+                gas_limit: _,
+            } => {
+                // Contract execution will be handled by upper layer
+                // This is a placeholder for now
+            }
+            TransactionPayload::Stake { amount } => {
+                let balance = self.get_balance(&tx.from);
+                if balance >= *amount {
+                    // In a full implementation, this would transfer to staking pool
+                    self.set_balance(&tx.from, balance - *amount);
+                }
+            }
+            TransactionPayload::Unstake { amount } => {
+                // In a full implementation, this would check staked amount
+                let balance = self.get_balance(&tx.from);
+                self.set_balance(&tx.from, balance + *amount);
+            }
+        }
     }
 
     pub fn simulate_block(&self, transactions: &[Transaction]) -> Vec<u8> {
@@ -33,13 +66,7 @@ impl<'a> StateProcessor<'a> {
         let mut temp_processor = SimulatedProcessor::new(snapshot_db, &mut temp_trie);
 
         for tx in transactions {
-            let from_balance = temp_processor.get_balance(&tx.from);
-            if from_balance < tx.amount {
-                continue;
-            }
-            let to_balance = temp_processor.get_balance(&tx.to);
-            temp_processor.set_balance(&tx.from, from_balance - tx.amount);
-            temp_processor.set_balance(&tx.to, to_balance + tx.amount);
+            temp_processor.apply_transaction(tx);
         }
 
         temp_processor.trie.root_hash()
